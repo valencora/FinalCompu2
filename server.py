@@ -1,40 +1,46 @@
 import asyncio
 import websockets
 import json
+import random
 
 
 clientes_conectados = set()
 
-async def manejar_cliente(websocket):
-    """ Maneja la conexión de cada cliente y retransmite mensajes """
-    clientes_conectados.add(websocket)
-    # print(f" Nuevo cliente conectado. Total clientes: {len(clientes_conectados)}") 
+usuarios_conectados = set()
 
+async def manejar_cliente(websocket):
+    global clientes_conectados, usuarios_conectados
+    clientes_conectados.add(websocket)
+
+    usuario = None  
     try:
-        # Recibir el nombre del usuario
+        
         mensaje_inicial = await websocket.recv()
         data_usuario = json.loads(mensaje_inicial)
         usuario = data_usuario.get("usuario")
+        
+       
+        if usuario in usuarios_conectados:
+            nuevo_sufijo = str(random.randint(100, 999))
+            usuario = usuario + nuevo_sufijo
+        usuarios_conectados.add(usuario)
+        
 
-       # print(f" {usuario} se ha conectado. Clientes conectados: {len(clientes_conectados)}")  
-
-        # Notificar a todos los clientes
+        
         await enviar_a_todos(f"🔔 {usuario} se ha unido al chat.", "sistema")
 
         # Escuchar mensajes del cliente
         async for mensaje in websocket:
-            # print(f" Mensaje recibido de {usuario}: {mensaje}") 
             data = json.loads(mensaje)
             texto = data.get("mensaje", "")
-
-            
             await enviar_a_todos(f"{usuario}: {texto}")
 
     except websockets.exceptions.ConnectionClosed:
         print(f"❌ {usuario} se ha desconectado.")
     finally:
         clientes_conectados.remove(websocket)
-        # print(f" Clientes conectados después de desconexión: {len(clientes_conectados)}")  
+        if usuario is not None and usuario in usuarios_conectados:
+            usuarios_conectados.remove(usuario)
         await enviar_a_todos(f"❌ {usuario} ha salido del chat.", "sistema")
 
 
@@ -42,18 +48,24 @@ async def enviar_a_todos(mensaje, tipo="mensaje"):
     """ Envía un mensaje a todos los clientes conectados """
     if clientes_conectados:
         data = json.dumps({"tipo": tipo, "mensaje": mensaje})
-        # print(f" Enviando mensaje a todos: {data}")  
-        # Se envía el mensaje a todos los clientes de forma concurrente
         await asyncio.gather(
             *(cliente.send(data) for cliente in clientes_conectados),
             return_exceptions=True
         )
 
-
-
-async def main():
-    print("📡 Servidor de chat iniciado en ws://localhost:8000")
-    server = await websockets.serve(manejar_cliente, "localhost", 8000)
+async def main(host, port):
+    print(f"📡 Servidor de chat iniciado en ws://{host}:{port}")
+    server = await websockets.serve(manejar_cliente, host, port)
     await server.wait_closed()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Servidor de chat con websockets")
+    parser.add_argument("--host", type=str, default="127.0.0.1",
+                        help="Dirección IP del servidor (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000,
+                        help="Puerto del servidor (default: 8000)")
+    args = parser.parse_args()
+
+    asyncio.run(main(args.host, args.port))

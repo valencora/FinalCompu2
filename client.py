@@ -1,23 +1,19 @@
+import argparse
 import asyncio
 import websockets
 import json
 
-async def chat():
-    usuario = input("Ingrese su nombre de usuario: ")
-
-    async with websockets.connect("ws://localhost:8000") as websocket:
+async def chat(uri, usuario):
+    async with websockets.connect(uri) as websocket:
         print("✅ Conectado al chat en vivo.")
 
-        # Enviar nombre de usuario al servidor
         await websocket.send(json.dumps({"usuario": usuario}))
-        
 
         async def recibir_mensajes():
             print("🕐 Esperando mensajes del servidor...")
             while True:
                 try:
                     mensaje = await websocket.recv()
-                    
                     data = json.loads(mensaje)
                     print(f"\n💬 {data['mensaje']}")
                 except websockets.exceptions.ConnectionClosed:
@@ -31,7 +27,15 @@ async def chat():
                 data = {"usuario": usuario, "mensaje": texto}
                 await websocket.send(json.dumps(data))
 
-
         await asyncio.gather(recibir_mensajes(), enviar_mensajes())
 
-asyncio.run(chat())
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Cliente de chat con websockets")
+    parser.add_argument("--uri", type=str, default="ws://127.0.0.1:8000",
+                        help="URI del servidor (default: ws://127.0.0.1:8000)")
+    parser.add_argument("--usuario", type=str, required=True,
+                        help="Nombre de usuario para el chat")
+    args = parser.parse_args()
+
+    
+    asyncio.run(chat(args.uri, args.usuario))
