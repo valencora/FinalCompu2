@@ -1,4 +1,5 @@
 import asyncio
+import socket
 import websockets
 import json
 import random
@@ -55,7 +56,13 @@ async def enviar_a_todos(mensaje, tipo="mensaje"):
 
 async def main(host, port):
     print(f"📡 Servidor de chat iniciado en ws://{host}:{port}")
-    server = await websockets.serve(manejar_cliente, host, port)
+    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, port))
+    sock.listen()
+    sock.setblocking(False)
+    server = await websockets.serve(manejar_cliente, host=None, port=None, sock=sock)
     await server.wait_closed()
 
 
