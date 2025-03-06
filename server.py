@@ -23,7 +23,7 @@ async def manejar_cliente(websocket):
             nuevo_sufijo = str(random.randint(100, 999))
             usuario = usuario + nuevo_sufijo
         usuarios_conectados.add(usuario)
-        
+        print(f"✅ {usuario} se ha conectado.")
         
         await enviar_a_todos(f"🔔 {usuario} se ha unido al chat.", "sistema")
 
