@@ -28,11 +28,10 @@ async def manejar_cliente(websocket):
         await enviar_a_todos(f"🔔 {usuario} se ha unido al chat.", "sistema")
 
         async for mensaje in websocket:
-            print(f"📨 Mensaje recibido de {usuario}: {mensaje}")
             data = json.loads(mensaje)
             texto = data.get("mensaje", "")
             
-            await enviar_a_todos(f"{usuario}: {texto}")
+            await enviar_a_todos(f"{usuario}: {texto}", sender=websocket)
             
             if persist_queue:
                 persist_queue.put((usuario, texto))
@@ -45,21 +44,24 @@ async def manejar_cliente(websocket):
             usuarios_conectados.remove(usuario)
         await enviar_a_todos(f"❌ {usuario} ha salido del chat.", "sistema")
 
-async def enviar_a_todos(mensaje, tipo="mensaje"):
-    """ Envía un mensaje a todos los clientes conectados """
+async def enviar_a_todos(mensaje, tipo="mensaje", sender=None):
     if clientes_conectados:
         data = json.dumps({"tipo": tipo, "mensaje": mensaje})
         await asyncio.gather(
-            *(cliente.send(data) for cliente in clientes_conectados),
+            *(cliente.send(data) for cliente in clientes_conectados if cliente != sender),
             return_exceptions=True
         )
 
 async def main(host, port):
     print(f"📡 Servidor de chat iniciado en ws://{host}:{port}")
-    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+    addrinfo = socket.getaddrinfo(host, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+    af, socktype, proto, canonname, sa = addrinfo[0]
+
+    sock = socket.socket(af, socktype, proto)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((host, port))
+    if af == socket.AF_INET6:
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+    sock.bind(sa)
     sock.listen()
     sock.setblocking(False)
     server = await websockets.serve(manejar_cliente, host=None, port=None, sock=sock)
@@ -84,8 +86,11 @@ def persist_worker(queue: Queue):
         if data is None:
             break
         usuario, mensaje = data
-        cursor.execute('INSERT INTO mensajes (usuario, mensaje) VALUES (?, ?)', (usuario, mensaje))
-        conn.commit()
+        try:
+            cursor.execute('INSERT INTO mensajes (usuario, mensaje) VALUES (?, ?)', (usuario, mensaje))
+            conn.commit()
+        except Exception as e:
+            print(f"Error al insertar mensaje en la base de datos: {e}")
 
     conn.close()
 
