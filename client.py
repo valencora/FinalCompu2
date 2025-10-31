@@ -17,7 +17,7 @@ async def chat(uri, usuario):
                     data = json.loads(mensaje)
                     print(f"\n💬 {data['mensaje']}")
                 except websockets.exceptions.ConnectionClosed:
-                    print("❌ Se perdió la conexión con el servidor.")
+                    print("❌ See perdió la conexión con el servidor.")
                     break
 
         async def enviar_mensajes():
